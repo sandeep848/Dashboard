@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGINGFACE_API_TOKEN=${HUGGINGFACE_API_TOKEN}
+      - HUGGINGFACE_MODEL=mistralai/Mistral-7B-Instruct-v0.2
+      - DATABASE_URL=sqlite:///./dashboard.db
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-min-32-characters-long}
+      - ENVIRONMENT=production
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+      - MAX_FILE_SIZE_MB=50
+      - ALLOWED_FILE_TYPES=csv,xlsx,xls,json
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  data:
