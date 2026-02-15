@@ -90,7 +90,7 @@ async def upload_file(file: UploadFile = File(...)):
             session_id=session_id,
             file_name=filename,
             file_type=file_extension,
-            schema=DataSchema(**schema_info),
+            data_schema=DataSchema(**schema_info),
             preview=preview,
             llm_insights=llm_insights_text
         )

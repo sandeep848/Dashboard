@@ -6,7 +6,7 @@ import logging
 
 from config.settings import settings
 from models.database import init_db
-from routers import upload, analysis, processing, visualization
+from routers import upload, analysis, processing, visualization, auth
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +48,7 @@ app.include_router(upload.router)
 app.include_router(analysis.router)
 app.include_router(processing.router)
 app.include_router(visualization.router)
+app.include_router(auth.router)
 
 @app.get("/")
 async def root():

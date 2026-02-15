@@ -51,45 +51,59 @@ class StorageService:
         metadata = _data_store.get(session_id)
         if not metadata:
             return None
-        
+
         if processed and metadata.get('processed_data_path'):
             file_path = metadata['processed_data_path']
         else:
             file_path = metadata['original_data_path']
-        
+
         if not file_path or not os.path.exists(file_path):
             return None
-        
+
         try:
+            # Processed files are loaded by extension (may differ from original upload type)
+            if file_path.endswith('.csv'):
+                return pd.read_csv(file_path)
+            if file_path.endswith('.json'):
+                return pd.read_json(file_path)
+            if file_path.endswith('.parquet'):
+                return pd.read_parquet(file_path)
+            if file_path.endswith('.xlsx') or file_path.endswith('.xls'):
+                return pd.read_excel(file_path)
+
             file_type = metadata['file_type']
             if file_type == 'csv':
                 return pd.read_csv(file_path)
-            elif file_type in ['xlsx', 'xls']:
+            if file_type in ['xlsx', 'xls']:
                 return pd.read_excel(file_path)
-            elif file_type == 'json':
+            if file_type == 'json':
                 return pd.read_json(file_path)
-            else:
-                # Try to infer
-                if file_path.endswith('.csv'):
-                    return pd.read_csv(file_path)
-                elif file_path.endswith('.json'):
-                    return pd.read_json(file_path)
-                else:
-                    return pd.read_excel(file_path)
+
+            logger.warning(f"Unknown file type for session {session_id}, trying CSV fallback")
+            return pd.read_csv(file_path)
         except Exception as e:
             logger.error(f"Error loading DataFrame: {str(e)}")
             return None
     
     def save_processed_dataframe(self, session_id: str, df: pd.DataFrame) -> str:
         """Save processed DataFrame"""
-        file_path = f"{self.data_dir}/processed/{session_id}_processed.parquet"
-        df.to_parquet(file_path, index=False)
-        
+        parquet_path = f"{self.data_dir}/processed/{session_id}_processed.parquet"
+        csv_path = f"{self.data_dir}/processed/{session_id}_processed.csv"
+
+        # Prefer parquet when engine exists; otherwise fallback to CSV
+        try:
+            df.to_parquet(parquet_path, index=False)
+            file_path = parquet_path
+        except Exception as e:
+            logger.warning(f"Parquet unavailable, falling back to CSV: {str(e)}")
+            df.to_csv(csv_path, index=False)
+            file_path = csv_path
+
         if session_id in _data_store:
             _data_store[session_id]['processed_data_path'] = file_path
             _data_store[session_id]['row_count'] = len(df)
             _data_store[session_id]['column_count'] = len(df.columns)
-        
+
         logger.info(f"Saved processed DataFrame: {file_path}")
         return file_path
     

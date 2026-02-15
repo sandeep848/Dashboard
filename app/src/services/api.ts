@@ -154,4 +154,67 @@ export const visualizationApi = {
   },
 };
 
+
+// Auth API
+export const authApi = {
+  signup: async (email: string, password: string, fullName: string) => {
+    const response = await apiClient.post('/api/auth/signup', {
+      email,
+      password,
+      full_name: fullName,
+    });
+    return response.data;
+  },
+
+  resendVerification: async (email: string) => {
+    const response = await apiClient.post('/api/auth/resend-verification', { email });
+    return response.data;
+  },
+
+  verifyEmail: async (email: string, token: string) => {
+    const response = await apiClient.post('/api/auth/verify-email', {
+      email,
+      token,
+    });
+    return response.data;
+  },
+
+  login: async (email: string, password: string, rememberMe = false) => {
+    const response = await apiClient.post('/api/auth/login', {
+      email,
+      password,
+      remember_me: rememberMe,
+    });
+    return response.data;
+  },
+
+  me: async (token: string) => {
+    const response = await apiClient.get('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  logout: async (token: string) => {
+    const response = await apiClient.post('/api/auth/logout', {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await apiClient.post('/api/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (email: string, token: string, newPassword: string) => {
+    const response = await apiClient.post('/api/auth/reset-password', {
+      email,
+      token,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
+};
+
 export default apiClient;

@@ -17,7 +17,7 @@ async def submit_use_case(request: UseCaseRequest):
     """Submit user's analysis use case"""
     session = storage_service.get_session(request.session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found. Upload a file first to create a session.")
     
     # Save use case
     storage_service.save_use_case(request.session_id, request.use_case)
@@ -59,7 +59,7 @@ async def get_recommendations(session_id: str):
     """Get processing recommendations for a session"""
     session = storage_service.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found. Upload a file first to create a session.")
     
     recommendations = session.get('processing_recommendations')
     if not recommendations:
@@ -73,7 +73,7 @@ async def suggest_visualizations(session_id: str):
     """Get visualization suggestions for processed data"""
     session = storage_service.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found. Upload a file first to create a session.")
     
     # Try to load processed data first, then original
     df = storage_service.load_dataframe(session_id, processed=True)
@@ -111,7 +111,7 @@ async def get_data_insights(session_id: str):
     """Get statistical insights about the data"""
     session = storage_service.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found. Upload a file first to create a session.")
     
     df = storage_service.load_dataframe(session_id)
     if df is None:
