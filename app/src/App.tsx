@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import FileUpload from '@/components/FileUpload';
@@ -7,7 +7,7 @@ import UseCaseInput from '@/components/UseCaseInput';
 import RecommendationCard from '@/components/RecommendationCard';
 import Dashboard from '@/components/Dashboard';
 import { useDashboardStore } from '@/store/dashboardStore';
-import { analysisApi } from '@/services/api';
+import { analysisApi, uploadApi, authApi } from '@/services/api';
 import { 
   Upload, 
   FileText, 
@@ -20,10 +20,29 @@ import {
   Database
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AuthPage from '@/components/AuthPage';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 
 function App() {
+  const [auth, setAuth] = useState<{ token: string; user: { email: string; full_name: string } } | null>(() => {
+    const remembered = localStorage.getItem('dashboard-auth');
+    const session = sessionStorage.getItem('dashboard-auth');
+    const raw = remembered || session;
+    return raw ? JSON.parse(raw) : null;
+  });
+
+  const handleAuthenticated = (authState: { token: string; user: { email: string; full_name: string } }, rememberMe: boolean) => {
+    setAuth(authState);
+    if (rememberMe) {
+      localStorage.setItem('dashboard-auth', JSON.stringify(authState));
+      sessionStorage.removeItem('dashboard-auth');
+    } else {
+      sessionStorage.setItem('dashboard-auth', JSON.stringify(authState));
+      localStorage.removeItem('dashboard-auth');
+    }
+  };
+
   const {
     sessionId,
     fileName,
@@ -35,8 +54,68 @@ function App() {
     currentStep,
     setCurrentStep,
     setVisualizationRecommendations,
+    setFileName,
+    setSchema,
+    setPreview,
     reset,
   } = useDashboardStore();
+
+  useEffect(() => {
+    const validateAuth = async () => {
+      if (!auth?.token) return;
+      try {
+        await authApi.me(auth.token);
+      } catch {
+        setAuth(null);
+        localStorage.removeItem('dashboard-auth');
+        sessionStorage.removeItem('dashboard-auth');
+      }
+    };
+
+    validateAuth();
+  }, [auth?.token]);
+
+  const handleLogout = async () => {
+    try {
+      if (auth?.token) {
+        await authApi.logout(auth.token);
+      }
+    } catch {
+      // Ignore remote logout failures, clear local session regardless.
+    }
+
+    setAuth(null);
+    localStorage.removeItem('dashboard-auth');
+    sessionStorage.removeItem('dashboard-auth');
+    reset();
+    toast.success('Logged out');
+  };
+
+  if (!auth) {
+    return <AuthPage onAuthenticated={handleAuthenticated} />;
+  }
+
+
+  // Validate persisted session on app load/reload
+  useEffect(() => {
+    const validateSession = async () => {
+      if (!sessionId) return;
+
+      try {
+        const sessionData = await uploadApi.getSessionData(sessionId);
+
+        // Rehydrate basic context in case page was refreshed
+        setFileName(sessionData.file_name ?? null);
+        setSchema(sessionData.schema ?? null);
+        setPreview(sessionData.preview ?? []);
+      } catch {
+        toast.error('Previous session expired. Please upload your file again.');
+        reset();
+      }
+    };
+
+    validateSession();
+  }, [sessionId, setFileName, setSchema, setPreview, reset]);
 
   // Fetch visualization recommendations when processed data is available
   useEffect(() => {
@@ -198,6 +277,9 @@ function App() {
                 </div>
                 <Button variant="outline" size="sm" onClick={handleReset}>
                   New Analysis
+                </Button>
+                <Button variant="secondary" size="sm" onClick={handleLogout}>
+                  Logout
                 </Button>
               </div>
             )}

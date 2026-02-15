@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
@@ -40,10 +40,12 @@ class DataSchema(BaseModel):
     memory_usage_mb: float
 
 class DataUploadResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     session_id: str
     file_name: str
     file_type: str
-    schema: DataSchema
+    data_schema: DataSchema = Field(alias="schema", serialization_alias="schema")
     preview: List[Dict[str, Any]]
     llm_insights: str
 
@@ -134,5 +136,5 @@ class DashboardConfig(BaseModel):
 
 class ExportRequest(BaseModel):
     session_id: str
-    format: str = Field(..., regex="^(pdf|png|json)$")
+    format: str = Field(..., pattern="^(pdf|png|json)$")
     chart_ids: Optional[List[str]] = None

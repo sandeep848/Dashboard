@@ -37,6 +37,7 @@ interface DashboardState {
   setProcessingRecommendations: (recs: ProcessingRecommendations | null) => void;
   setVisualizationRecommendations: (recs: VisualizationRecommendations | null) => void;
   setProcessedData: (data: ProcessedDataResponse | null) => void;
+  setCharts: (charts: ChartData[]) => void;
   addChart: (chart: ChartData) => void;
   removeChart: (chartId: string) => void;
   updateChart: (chartId: string, updates: Partial<ChartData>) => void;
@@ -76,6 +77,7 @@ export const useDashboardStore = create<DashboardState>()(
       setProcessingRecommendations: (recs) => set({ processingRecommendations: recs }),
       setVisualizationRecommendations: (recs) => set({ visualizationRecommendations: recs }),
       setProcessedData: (data) => set({ processedData: data }),
+      setCharts: (charts) => set({ charts }),
       addChart: (chart) => set((state) => ({ charts: [...state.charts, chart] })),
       removeChart: (chartId) => set((state) => ({ 
         charts: state.charts.filter((c) => c.chart_id !== chartId) 

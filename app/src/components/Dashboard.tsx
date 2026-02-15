@@ -44,20 +44,67 @@ const Dashboard = () => {
     visualizationRecommendations,
     charts,
     addChart,
+    setCharts,
     removeChart,
     updateChart,
     useCase,
   } = useDashboardStore();
 
+
+  const availableColumns = new Set(processedData?.columns ?? []);
+  const filteredRecommendations = visualizationRecommendations
+    ? {
+        ...visualizationRecommendations,
+        charts: visualizationRecommendations.charts.filter((rec) =>
+          availableColumns.has(rec.x_axis) &&
+          rec.y_axis.length > 0 &&
+          rec.y_axis.every((y) => availableColumns.has(y))
+        ),
+      }
+    : null;
+
   useEffect(() => {
-    if (visualizationRecommendations && charts.length === 0) {
-      // Auto-create first recommended chart
-      const firstRec = visualizationRecommendations.charts[0];
+    const loadExistingCharts = async () => {
+      if (!sessionId) return;
+
+      try {
+        const response = await visualizationApi.getSessionCharts(sessionId);
+        const backendCharts = response?.charts ?? [];
+
+        const normalizedCharts = backendCharts.map((chart: any) => ({
+          chart_id: chart.chart_id ?? chart.id,
+          chart_type: chart.chart_type,
+          title: chart.title,
+          description: chart.description ?? `${chart.title} - ${chart.chart_type} chart`,
+          data: chart.data ?? [],
+          x_axis: chart.x_axis,
+          y_axis: chart.y_axis ?? [],
+          compatible_types: chart.compatible_types ?? [],
+          configuration: {
+            filters: chart.filters,
+            created_at: chart.created_at,
+          },
+        }));
+
+        setCharts(normalizedCharts);
+      } catch {
+        // Ignore initial chart fetch failures; chart creation can still proceed.
+      }
+    };
+
+    loadExistingCharts();
+  }, [sessionId, setCharts]);
+
+  useEffect(() => {
+    if (filteredRecommendations && charts.length === 0) {
+      // Auto-create first recommended chart only when no persisted chart exists
+      const firstRec = filteredRecommendations.charts[0];
       if (firstRec) {
         handleCreateChartFromRecommendation(firstRec);
       }
     }
-  }, [visualizationRecommendations]);
+  }, [filteredRecommendations, charts.length]);
+
 
   const handleCreateChartFromRecommendation = async (recommendation: ChartRecommendation) => {
     if (!sessionId) return;
@@ -166,15 +213,15 @@ const Dashboard = () => {
               </DialogHeader>
               
               <div className="space-y-4">
-                {/* AI Recommendations */}
-                {visualizationRecommendations && visualizationRecommendations.charts.length > 0 && (
+                {/* AI Recommendations (context-filtered) */}
+                {filteredRecommendations && filteredRecommendations.charts.length > 0 && (
                   <div>
                     <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-primary" />
                       AI Recommended Charts
                     </h3>
                     <div className="grid gap-3">
-                      {visualizationRecommendations.charts.map((rec, idx) => (
+                      {filteredRecommendations.charts.map((rec, idx) => (
                         <button
                           key={idx}
                           onClick={() => handleCreateChartFromRecommendation(rec)}
@@ -245,7 +292,7 @@ const Dashboard = () => {
         </TabsContent>
 
         <TabsContent value="recommendations">
-          {visualizationRecommendations ? (
+          {filteredRecommendations ? (
             <div className="space-y-4">
               <Card>
                 <CardHeader>
@@ -253,12 +300,12 @@ const Dashboard = () => {
                     <Sparkles className="h-5 w-5 text-primary" />
                     AI Visualization Strategy
                   </CardTitle>
-                  <CardDescription>{visualizationRecommendations.summary}</CardDescription>
+                  <CardDescription>{filteredRecommendations.summary}</CardDescription>
                 </CardHeader>
               </Card>
 
               <div className="grid gap-4">
-                {visualizationRecommendations.charts.map((rec, idx) => (
+                {filteredRecommendations.charts.map((rec, idx) => (
                   <Card key={idx}>
                     <CardHeader>
                       <div className="flex items-start justify-between">

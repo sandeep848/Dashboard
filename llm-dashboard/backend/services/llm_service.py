@@ -13,10 +13,11 @@ class LLMService:
         self.api_token = settings.HUGGINGFACE_API_TOKEN
         self.model = settings.HUGGINGFACE_MODEL
         self.base_url = f"https://api-inference.huggingface.co/models/{self.model}"
-        self.headers = {
-            "Authorization": f"Bearer {self.api_token}",
-            "Content-Type": "application/json"
-        }
+        self.headers = {"Content-Type": "application/json"}
+        if self.api_token:
+            self.headers["Authorization"] = f"Bearer {self.api_token}"
+        else:
+            logger.warning("HUGGINGFACE_API_TOKEN is not set. Using fallback recommendations without LLM API calls.")
     
     def _format_prompt(self, system_message: str, user_prompt: str) -> str:
         """Format prompt for Mistral instruction format"""
@@ -44,6 +45,9 @@ class LLMService:
     
     async def _call_llm(self, prompt: str, max_retries: int = 3) -> str:
         """Call Hugging Face Inference API with retry logic"""
+        if not self.api_token:
+            return ""
+
         payload = {
             "inputs": prompt,
             "parameters": {
@@ -128,6 +132,64 @@ Provide your analysis in the specified JSON format."""
             "recommended_columns": [c['name'] for c in df_info['columns'][:5]]
         }
     
+
+    def _score_column_relevance(self, column: Dict[str, Any], use_case: str) -> int:
+        name = column.get('name', '').lower()
+        goal = use_case.lower()
+        score = 0
+
+        keyword_groups = {
+            'time': ['trend', 'time', 'monthly', 'daily', 'year', 'season'],
+            'geo': ['region', 'location', 'country', 'city', 'state'],
+            'customer': ['customer', 'user', 'segment', 'cohort'],
+            'sales': ['sale', 'revenue', 'price', 'amount', 'profit', 'cost'],
+            'category': ['category', 'type', 'group', 'status'],
+            'marketing': ['campaign', 'channel', 'spend', 'conversion'],
+        }
+
+        for group, terms in keyword_groups.items():
+            if any(term in goal for term in terms):
+                if group == 'time' and (column.get('is_datetime') or any(t in name for t in ['date', 'time', 'month', 'year'])):
+                    score += 3
+                if group == 'geo' and any(t in name for t in ['region', 'country', 'city', 'state', 'location']):
+                    score += 3
+                if group == 'customer' and any(t in name for t in ['customer', 'user', 'client', 'segment']):
+                    score += 3
+                if group == 'sales' and any(t in name for t in ['sales', 'revenue', 'price', 'amount', 'profit', 'cost']):
+                    score += 3
+                if group == 'category' and (column.get('is_categorical') or any(t in name for t in ['category', 'type', 'group', 'status'])):
+                    score += 2
+                if group == 'marketing' and any(t in name for t in ['campaign', 'channel', 'spend', 'conversion', 'ad']):
+                    score += 3
+
+        if column.get('is_numeric'):
+            score += 1
+        if column.get('is_datetime'):
+            score += 1
+        if column.get('null_percentage', 100) > 70:
+            score -= 2
+
+        return score
+
+    def _smart_fallback_recommendations(self, use_case: str, data_summary: Dict[str, Any]) -> Dict[str, Any]:
+        columns = data_summary.get('columns', [])
+        scored = sorted(columns, key=lambda c: self._score_column_relevance(c, use_case), reverse=True)
+
+        selected = [c['name'] for c in scored if self._score_column_relevance(c, use_case) > 1][:8]
+        if not selected:
+            selected = [c['name'] for c in scored[: min(5, len(scored))]]
+
+        dropped = [c['name'] for c in columns if c['name'] not in selected]
+
+        return {
+            "columns_to_drop": dropped,
+            "columns_to_keep": selected,
+            "cleaning_steps": [],
+            "feature_engineering": [],
+            "filtering_criteria": [],
+            "explanation": "Fallback recommendation selected context-relevant columns using data types and use-case keywords.",
+        }
+
     async def recommend_processing(self, use_case: str, data_summary: Dict[str, Any]) -> Dict[str, Any]:
         """Recommend data processing steps based on use case"""
         system_message = """You are a data preprocessing expert. Based on the user's analysis goal and data structure, recommend specific data processing steps.
@@ -160,14 +222,7 @@ Recommend processing steps in the specified JSON format."""
             return result
         
         # Fallback response
-        return {
-            "columns_to_drop": [],
-            "columns_to_keep": [c['name'] for c in data_summary.get('columns', [])],
-            "cleaning_steps": [],
-            "feature_engineering": [],
-            "filtering_criteria": [],
-            "explanation": "No specific recommendations generated. All columns retained for analysis."
-        }
+        return self._smart_fallback_recommendations(use_case, data_summary)
     
     async def suggest_visualizations(self, processed_data: Dict[str, Any], use_case: str) -> Dict[str, Any]:
         """Suggest appropriate visualizations"""
